@@ -1,0 +1,19 @@
+{
+  "name": "microservice",
+  "version": "0.1.0",
+  "description": "Microservices Architectureの実装検証プロジェクト",
+  "main": "index.js",
+  "repository": "https://github.com/masakazu1967/microservice.git",
+  "author": "Masakazu Kobayashi <masakazu1967@yggdrasilroot.info>",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "user-service:start": "yarn workspace @microservice/user-service start",
+    "user-service:start:dev": "yarn workspace @microservice/user-service start:dev"
+  },
+  "workspaces": [
+    "frontend/*",
+    "backend/*",
+    "lib/*"
+  ]
+}
