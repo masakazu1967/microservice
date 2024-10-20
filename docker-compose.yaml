@@ -1,0 +1,6 @@
+services:
+  user-service:
+    image: microservices/user-service:$USER_SERVICE_VERSION
+    network_mode: host
+    ports:
+      - "$USER_SERVICE_PORT:5001"

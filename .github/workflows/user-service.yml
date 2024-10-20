@@ -1,0 +1,65 @@
+name: user-service
+on:
+  push:
+    tags:
+      - 'user-service-*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      SERVICE_NAME: 'user-service'
+    defaults:
+      run:
+        working-directory: ./backend/user-service
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Check tagged branch
+        run: |
+           BRANCHS=$(git branch --contains ${{ github.ref_name }})
+           set -- $BRANCHS
+           for BRANCH in $BRANCHS ; do
+             if [[ "$BRANCH" == "main" ]]; then
+               exit 0
+             fi
+           done
+           exit 1
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        id: cache_node_module
+        with:
+          path: '**/node_modules'
+          key: node-${{ hashFiles('package-lock.json') }}
+          restore-keys: node-
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: './backend/user-service/package.json'
+      - name: Install node packages
+        if: ${{ steps.cache_node_module.outputs.cache-hit != 'true' }}
+        run: yarn install
+      - name: Run lint
+        run: yarn lint
+      - name: Create release build
+        run: yarn build
+      - name: Run Unit Test
+        run: yarn test:cov
+      - name: Get Version
+        id: package-version
+        uses: martinbeentjes/npm-get-version-action@v1.3.1
+        with:
+          path: backend/user-service
+      - name: Set FQ_SERVICE_NAME
+        run: echo "FQ_SERVICE_NAME=ghcr.io/${{ github.repository }}/${SERVICE_NAME}" >> $GITHUB_ENV
+      - name: Build docker image
+        run: docker build -t $SERVICE_NAME -f Dockerfile .
+      - name: Change image name
+        run: docker tag $SERVICE_NAME $FQ_SERVICE_NAME:${{steps.package-version.outputs.current-version}}
+      - name: Login Github Container Package
+        run: docker login ghcr.io -u masakazu1967 -p ${{ secrets.DOCKER_REGISTRY_PUSH }}
+      - name: Push image to github registry
+        run: docker push $FQ_SERVICE_NAME:${{steps.package-version.outputs.current-version}}
