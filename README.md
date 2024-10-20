@@ -151,6 +151,44 @@ cd ../../
 あくまでMSAの実証検証のためなので、データベースへのアクセスなどは考えず、インメモリーでの保存の実装を行います。
 実際のメール送信も本質的な問題ではないため、実装は見送ります。
 
+API Gatewayのユーザーリストを取得するを実装するために、API Gatewayアプリケーションを作成します。
+
+```shell
+cd backend
+nest new api-gateway
+cd ..
+```
+
+作成したapi-gatewayのpackage.jsonのnameをapi-gatewayから@microsoft/api-gatewayに変更します。
+
+./backend/api-gateway/package.json
+
+```json
+{
+  "name": "api-gateway",
+  "version": "0.0.1",
+  ...
+}
+```
+
+を
+
+```json
+{
+  "name": "@microservice/api-gateway",
+  "version": "0.0.1",
+  ...
+}
+```
+
+に変更します。
+
+NestJSのmicroservices OverviewとgRPCのInstallationに記述のパッケージをインストールします。
+
+```shell
+yarn workspace @microservice/api-gateway add @nestjs/microservices @grpc/grpc-js @grpc/proto-loader
+```
+
 ## ドメイン
 
 ```plantuml
@@ -314,6 +352,8 @@ export class AppModule {}
 
 ルートディレクトリのpackage.jsonの`scripts`に起動のショートカットを追加します。
 
+./package.json
+
 ```json
   "scripts": {
     "user-service:start": "yarn workspace @microservice/user-service start",
@@ -404,7 +444,135 @@ call FindAll
 }
 ```
 
-gRPCでリクエスト・レスポンスの実装ができることが検証できました。
+gRPCでリクエスト・レスポンスの実装ができることが検証できました。続いてAPI Gatewayからユーザーサービスを呼び出してみましょう。
+
+ユーザーサービスのuser.protoとuser.tsをAPI Gatewayのuserフォルダにコピーします。
+
+```shell
+.
+├── backend/
+│   ├── user-service/
+│   │   └── src/
+│   │       └── user/
+│   │           ├── user.proto // このファイルをapi-gateway/src/userにコピー
+│   │           └── user.ts // このファイルをapi-gateway/src/userにコピー
+│   ├── email-service
+│   └── api-gateway/
+│       └── src/
+│           └── user/
+│               ├── user.proto // コピーされたファイル
+│               └── user.ts // コピーされたファイル
+├── frontend
+└── lib
+```
+
+API GatewayのAppModuleにクライアントモジュールとしてユーザーサービスを登録します。
+
+./backend/api-gateway/src/app.module.ts
+
+```ts
+@Module({
+  imports: [
+    ClientsModule.register([
+      {
+        name: 'USER_PACKAGE',
+        transport: Transport.GRPC,
+        options: {
+          package: 'user',
+          protoPath: join(__dirname, './user/user.proto'),
+          url: process.env.USER_SERVICE_URL || 'localhost:5001',
+        },
+      },
+    ]),
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
+```
+
+登録したクライアントをAppServiceに注入します。
+
+./backend/api-gateway/app.service.ts
+
+```ts
+@Injectable()
+export class AppService implements OnModuleInit {
+  private userService: UserServiceClient;
+
+  constructor(@Inject('USER_PACKAGE') private client: ClientGrpcProxy) {}
+
+  onModuleInit() {
+    this.userService = this.client.getService<UserServiceClient>('UserService');
+  }
+
+  findAllUsers(): Observable<UserReply> {
+    return this.userService.findAll({});
+  }
+}
+```
+
+AppControllerからAppServiceのfindAllUsers()を呼び出します。
+
+./backend/api-gateway/app.controller.ts
+
+```ts
+@Controller()
+export class AppController {
+  constructor(private readonly appService: AppService) {}
+
+  @Get('/users')
+  findAllUser(): Observable<UserReply> {
+    return this.appService.findAllUsers();
+  }
+}
+```
+
+API Gatewayも.protoファイルをビルドしてできたdistフォルダに配置するために`assets`に.protoファイルを追加して`watchAssets`を`true`にします。
+
+./backend/api-gateway/nest-cli.json
+
+```json
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "compilerOptions": {
+    "assets": ["**/*.proto"],
+    "watchAssets": true,
+    "deleteOutDir": true
+  }
+}
+```
+
+ルートディレクトリのpackage.jsonの`scripts`にAPI Gateway起動のショートカットを追加します。
+
+./package.json
+
+```json
+  "scripts": {
+    "api-gateway:start": "yarn workspace @microservice/api-gateway start",
+    "api-gateway:start:dev": "yarn workspace @microservice/api-gateway start:dev",
+    "user-service:start": "yarn workspace @microservice/user-service start",
+    "user-service:start:dev": "yarn workspace @microservice/user-service start:dev"
+  },
+```
+
+ユーザーサービスが立ち上がっている状態で、API Gatewayを起動します。
+
+```shell
+yarn api-gateway:start:dev
+```
+
+API Gatewayのユーザーリストを取得するAPIを呼び出します。
+
+```shell
+curl http://localhost:3000/users
+{"users":[{"id":1,"email":"john@example.com","name":"John"},{"id":2,"email":"doe@example.com","name":"Doe"}]}
+```
+
+protoファイルと生成されたtsファイルはクライアントとサーバー両方で使用します。
+共通な場所に保存するのではなくて、別々に管理します。サーバーの開発中のprotoファイルとクライアントが使用したいprotoファイルは異なる可能性があるからです。
 
 ### 「ユーザーを新規登録する」ユースケース
 
