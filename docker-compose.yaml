@@ -1,6 +1,13 @@
 services:
+  api-gateway:
+    image: ghcr.io/masakazu1967/microservice/api-gateway:$API_GATEWAY_VERSION
+    ports:
+      - "$API_GATEWAY_PORT:3000"
+    environment:
+      PORT: $API_GATEWAY_PORT
+      USER_SERVICE_URL: user-service:$USER_SERVICE_PORT
+
   user-service:
-    image: microservices/user-service:$USER_SERVICE_VERSION
-    network_mode: host
+    image: ghcr.io/masakazu1967/microservice/user-service:$USER_SERVICE_VERSION
     ports:
       - "$USER_SERVICE_PORT:5001"

@@ -8,6 +8,8 @@
   "license": "MIT",
   "private": true,
   "scripts": {
+    "api-gateway:start": "yarn workspace @microservice/api-gateway start",
+    "api-gateway:start:dev": "yarn workspace @microservice/api-gateway start:dev",
     "user-service:start": "yarn workspace @microservice/user-service start",
     "user-service:start:dev": "yarn workspace @microservice/user-service start:dev"
   },
